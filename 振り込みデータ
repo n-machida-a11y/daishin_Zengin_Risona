@@ -1,0 +1,113 @@
+'========================================================================================
+' 振込内容の「確認用リスト」を作成するメインのプロシージャ (漢字→カナ変換対応版)
+'========================================================================================
+Public Sub CreateFormattedTransferList_Final()
+
+    ' --- 変数定義 ---
+    Dim wsSettings As Worksheet, wsInput As Worksheet, wsOutput As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    Dim outputRow As Long
+    
+    ' --- 初期設定とエラーハンドリング ---
+    On Error GoTo ErrorHandler
+    
+    ' 各ワークシートをセット (シート名が違う場合はここを修正)
+    Set wsSettings = ThisWorkbook.Worksheets("振込元設定")
+    Set wsInput = ThisWorkbook.Worksheets("金額入力")
+    Set wsOutput = ThisWorkbook.Worksheets("振込データ")
+
+    ' --- 出力シートをクリア ---
+    wsOutput.Cells.ClearContents
+    
+    ' --- ヘッダー（列のタイトル）を書き込む ---
+    Dim headers As Variant
+    headers = Array("No.", "振込先銀行番号", "振込先銀行名（カナ）", "振込先支店番号", "振込先支店名（カナ）", _
+                    "手形交換所番号(任意)", "振込先預金種目", "振込先口座番号", "受取人名（カナ）", _
+                    "振込金額(円)", "新規コード", "顧客コード1/EDI情報(任意)", "顧客コード2/EDI情報(任意)", _
+                    "EDI識別表示(任意)", "振込指定区分")
+    
+    wsOutput.Range("A1").Resize(1, UBound(headers) + 1).Value = headers
+    
+    ' --- 「金額入力」シートからデータを読み込み、リストを作成 ---
+    lastRow = wsInput.Cells(wsInput.Rows.Count, "B").End(xlUp).Row
+    outputRow = 2 ' 出力は2行目から
+    
+    ' 2行目から最終行までループ
+    For i = 2 To lastRow
+        ' B列に取引先名が入力されている行のみ処理
+        If wsInput.Cells(i, "B").Value <> "" Then
+            
+            wsOutput.Cells(outputRow, "A").Value = 2
+            wsOutput.Cells(outputRow, "B").Value = PadZero(wsInput.Cells(i, "D").Value, 4)
+            
+            ' ② 振込先銀行名（カナ）→ ★修正点: GetPhoneticで漢字をカナに変換してから整形
+            wsOutput.Cells(outputRow, "C").Value = FormatToHankaku(Application.GetPhonetic(wsInput.Cells(i, "E").Value), 15)
+            
+            wsOutput.Cells(outputRow, "D").Value = PadZero(wsInput.Cells(i, "F").Value, 3)
+            
+            ' ④ 振込先支店名（カナ）→ ★修正点: GetPhoneticで漢字をカナに変換してから整形
+            wsOutput.Cells(outputRow, "E").Value = FormatToHankaku(Application.GetPhonetic(wsInput.Cells(i, "G").Value), 15)
+            
+            Dim accType As String
+            accType = CStr(wsInput.Cells(i, "H").Value)
+            If InStr(accType, "普通") > 0 Or accType = "1" Then
+                wsOutput.Cells(outputRow, "G").Value = 1
+            ElseIf InStr(accType, "当座") > 0 Or accType = "2" Then
+                wsOutput.Cells(outputRow, "G").Value = 2
+            Else
+                wsOutput.Cells(outputRow, "G").Value = accType
+            End If
+            
+            wsOutput.Cells(outputRow, "H").Value = PadZero(wsInput.Cells(i, "I").Value, 7)
+            wsOutput.Cells(outputRow, "I").Value = FormatToHankaku(Application.GetPhonetic(wsInput.Cells(i, "J").Value), 30)
+            wsOutput.Cells(outputRow, "J").Value = wsInput.Cells(i, "A").Value
+            wsOutput.Cells(outputRow, "K").Value = 1
+            wsOutput.Cells(outputRow, "O").Value = 7
+
+            outputRow = outputRow + 1
+        End If
+    Next i
+    
+    ' --- 書式設定 ---
+    wsOutput.Columns("A:O").AutoFit
+    wsOutput.Range("J:J").NumberFormatLocal = "#,##0"
+    Exit Sub
+
+' --- エラー処理 ---
+ErrorHandler:
+    MsgBox "エラーが発生しました。" & vbCrLf & _
+           "シート名や入力データの列、ふりがな設定が正しいか確認してください。" & vbCrLf & vbCrLf & _
+           "エラー内容: " & Err.Description, vbCritical
+
+End Sub
+
+
+'========================================================================================
+' ヘルパー関数群 (データ整形用) - 変更なし
+'========================================================================================
+
+' --- 左側を '0' で埋める関数 ---
+Private Function PadZero(ByVal number As Variant, ByVal length As Integer) As String
+    If IsNumeric(number) Then
+        PadZero = Right(String(length, "0") & CLng(number), length)
+    Else
+        PadZero = Right(String(length, "0") & number, length)
+    End If
+End Function
+
+' --- 半角カナに変換し、指定バイト数に切り詰める関数 ---
+Private Function FormatToHankaku(ByVal text As String, ByVal maxLengthInBytes As Integer) As String
+    Dim formattedText As String
+    
+    ' 半角に統一
+    formattedText = StrConv(text, vbNarrow)
+    
+    ' バイト数が最大長を超える場合、バイト数を超えないように末尾から1文字ずつ削る
+    Do While LenB(StrConv(formattedText, vbFromUnicode)) > maxLengthInBytes
+        formattedText = Left(formattedText, Len(formattedText) - 1)
+    Loop
+    
+    FormatToHankaku = formattedText
+End Function
+
