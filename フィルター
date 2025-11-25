@@ -1,0 +1,69 @@
+Sub CopyFilteredData() ' プロシージャ名を変更しました
+    ' --- 変数を宣言します ---
+    Dim wsSource As Worksheet
+    Dim wsDest As Worksheet
+    Dim lastRow As Long ' コピー元シートの最終データ行
+    
+    Dim i As Long ' コピー元シートの行をループするためのカウンタ
+    Dim nextDestRow As Long ' 貼り付け先シートの次の書き込み行
+    
+    ' --- 操作対象のシートを設定します ---
+    On Error Resume Next
+    Set wsSource = ThisWorkbook.Sheets("振込先選択")
+    Set wsDest = ThisWorkbook.Sheets("金額入力")
+    On Error GoTo 0
+    
+    ' シートの存在チェック
+    If wsSource Is Nothing Or wsDest Is Nothing Then
+        MsgBox "「振込先選択」または「金額入力」シートが見つかりません。" & vbCrLf & "シート名を確認してください。", vbCritical, "エラー"
+        Exit Sub
+    End If
+    
+    ' --- 貼り付け先の既存データをクリアします ---
+    wsDest.Range("B2:O" & wsDest.Rows.Count).ClearContents
+    
+    ' --- コピー元のデータ範囲を特定します ---
+    lastRow = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
+    
+    ' ヘッダー行(2行目)までしかない場合は、処理を終了
+    If lastRow <= 2 Then
+        MsgBox "コピーするデータがありません。", vbInformation, "情報"
+        Exit Sub
+    End If
+    
+    ' 貼り付け先の開始行を設定（B2セルが起点）
+    nextDestRow = 2
+    
+    ' --- A列が「◯」のデータのみをループでコピーして貼り付けます ---
+    Application.ScreenUpdating = False ' 画面描画を停止して処理を高速化
+    
+    ' 3行目（データ開始行）から最終行までループ
+    For i = 3 To lastRow
+        
+        ' ★★★ 判定部分を「◯」（まる）に変更 ★★★
+        ' A列のセルの値が「◯」（まる）であるかチェックします
+        If Trim(wsSource.Cells(i, "A").Value) = "◯" Then
+            
+            ' C列からP列までの14列（元のコードのコピー範囲）をコピー
+            wsSource.Cells(i, "C").Resize(1, 14).Copy
+            
+            ' 「金額入力」シートのB列の次の書き込み行に「値」のみを貼り付け
+            wsDest.Cells(nextDestRow, "B").PasteSpecial Paste:=xlPasteValues
+            
+            ' 次の貼り付け行へ移動
+            nextDestRow = nextDestRow + 1
+        End If
+    Next i
+    
+    ' --- 処理の完了 ---
+    Application.CutCopyMode = False ' コピーモードを解除
+    Application.ScreenUpdating = True ' 画面描画を再開
+    
+    ' nextDestRow - 2 でコピーしたデータ件数を算出
+    If nextDestRow = 2 Then
+        ' 終了メッセージも「◯」に合わせて修正
+        MsgBox "A列に「◯」が入力されたデータは存在しませんでした。", vbInformation, "情報"
+    Else
+        MsgBox nextDestRow - 2 & " 件のデータを転記しました。", vbInformation, "完了"
+    End If
+End Sub
