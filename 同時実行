@@ -1,0 +1,9 @@
+Sub RunBothProcedures()
+   
+    Call CreateFormattedTransferList_Final
+    
+    Call CreateZenginCsvFile
+    
+    ' 処理完了のメッセージを表示（任意）
+    MsgBox "ファイルが作成されました", vbInformation
+End Sub
