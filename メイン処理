@@ -1,0 +1,126 @@
+Option Explicit
+
+'================================================================================
+' メイン処理：総合振込ファイル（CSV形式）を作成します。
+'================================================================================
+Public Sub CreateZenginCsvFile()
+
+    ' --- 変数宣言 ---
+    Dim wsSrc As Worksheet   ' 振込元設定シート
+    Dim wsData As Worksheet  ' 振込データシート
+    Dim lastRow As Long      ' 振込データの最終行
+    Dim i As Long            ' ループカウンター
+    
+    Dim filePath As String   ' 保存するファイルパス
+    Dim fileDate As String   ' ファイル名に使う振込指定日
+    
+    Dim totalCount As Long   ' 合計件数
+    Dim totalAmount As Double ' 合計金額
+    
+    Dim fileContent As String ' ファイル全体の内容を格納する文字列
+    Dim line As String       ' ファイルの1行分の文字列
+
+    ' --- 初期設定 ---
+    On Error GoTo ErrorHandler
+    
+    Set wsSrc = ThisWorkbook.Sheets("振込元設定")
+    Set wsData = ThisWorkbook.Sheets("振込データ")
+    lastRow = wsData.Cells(wsData.Rows.Count, "A").End(xlUp).Row
+    
+    If lastRow < 2 Then
+        MsgBox "振込データがありません。", vbExclamation
+        Exit Sub
+    End If
+    
+    ' --- ヘッダーレコードの作成 ---
+    ' ★修正: フィールド数を13から15に調整するために末尾にカンマを2つ追加 (",,")
+    line = "1" & "," & _
+           "21" & "," & _
+           "0" & "," & _
+           wsSrc.Range("B2").Value & "," & _
+           StrConv(wsSrc.Range("B3").Value, vbNarrow) & "," & _
+           Format(wsSrc.Range("B4").Value, "0000") & "," & _
+           wsSrc.Range("B5").Value & "," & _
+           StrConv(wsSrc.Range("B6").Value, vbNarrow) & "," & _
+           wsSrc.Range("B7").Value & "," & _
+           wsSrc.Range("B8").Value & "," & _
+           wsSrc.Range("B9").Value & "," & _
+           wsSrc.Range("B10").Value & "," & _
+           "" & ",," ' 元の13フィールド + 2フィールド = 15フィールド
+    fileContent = fileContent & line & vbCrLf
+
+    ' --- データレコードの作成（ループ処理） ---
+    totalCount = 0
+    totalAmount = 0
+    
+    For i = 2 To lastRow
+        totalCount = totalCount + 1
+        
+        If IsNumeric(wsData.Cells(i, "J").Value) Then
+            totalAmount = totalAmount + CDbl(wsData.Cells(i, "J").Value)
+        End If
+        
+        ' ★修正: フィールド数を16から15に調整するために末尾のダミーフィールド "" を削除
+        line = "2" & "," & _
+               wsData.Cells(i, "B").Value & "," & _
+               wsData.Cells(i, "C").Value & "," & _
+               wsData.Cells(i, "D").Value & "," & _
+               wsData.Cells(i, "E").Value & "," & _
+               wsData.Cells(i, "F").Value & "," & _
+               wsData.Cells(i, "G").Value & "," & _
+               wsData.Cells(i, "H").Value & "," & _
+               wsData.Cells(i, "I").Value & "," & _
+               wsData.Cells(i, "J").Value & "," & _
+               "1" & "," & _
+               wsData.Cells(i, "L").Value & "," & _
+               wsData.Cells(i, "M").Value & "," & _
+               wsData.Cells(i, "N").Value & "," & _
+               wsData.Cells(i, "O").Value
+        fileContent = fileContent & line & vbCrLf
+    Next i
+
+    ' --- トレーラーレコードの作成 ---
+    ' ★修正: フィールド数を4から15に調整するために末尾にカンマを11個追加
+    line = "8" & "," & _
+           totalCount & "," & _
+           totalAmount & "," & _
+           "" & String(11, ",") ' 元の4フィールド + 11フィールド = 15フィールド
+    fileContent = fileContent & line & vbCrLf
+    
+    ' --- エンドレコードの作成 ---
+    ' ★修正: フィールド数を1から15に調整するために末尾にカンマを14個追加
+    line = "9" & String(14, ",") ' 1フィールド + 14フィールド = 15フィールド
+    fileContent = fileContent & line & vbCrLf
+
+    ' --- ファイル出力 ---
+    fileDate = Format(wsSrc.Range("B4").Value, "0000")
+    filePath = ThisWorkbook.Path & "\FB_RESONA_CSV_" & fileDate & ".csv"
+    
+    Call WriteShiftJisFile(filePath, fileContent)
+    
+    MsgBox "総合振込CSVファイルを作成しました。" & vbCrLf & "保存先: " & filePath, vbInformation
+    
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "エラーが発生しました。" & vbCrLf & "エラー番号: " & Err.number & vbCrLf & "エラー内容: " & Err.Description, vbCritical
+End Sub
+
+'================================================================================
+' 補助関数：Shift_JISでテキストファイルに書き込む (変更なし)
+'================================================================================
+Private Sub WriteShiftJisFile(ByVal filePath As String, ByVal content As String)
+    Dim adoSt As Object
+    Set adoSt = CreateObject("ADODB.Stream")
+    
+    With adoSt
+        .Charset = "Shift_JIS"
+        .Open
+        .WriteText content
+        .SaveToFile filePath, 2 ' 2 = 上書き保存
+        .Close
+    End With
+    
+    Set adoSt = Nothing
+End Sub
+
