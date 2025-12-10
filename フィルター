@@ -1,11 +1,10 @@
-Sub CopyFilteredData() ' プロシージャ名を変更しました
+Sub CopyFilteredData()
     ' --- 変数を宣言します ---
     Dim wsSource As Worksheet
     Dim wsDest As Worksheet
-    Dim lastRow As Long ' コピー元シートの最終データ行
-    
-    Dim i As Long ' コピー元シートの行をループするためのカウンタ
-    Dim nextDestRow As Long ' 貼り付け先シートの次の書き込み行
+    Dim lastRow As Long
+    Dim i As Long
+    Dim nextDestRow As Long
     
     ' --- 操作対象のシートを設定します ---
     On Error Resume Next
@@ -13,57 +12,83 @@ Sub CopyFilteredData() ' プロシージャ名を変更しました
     Set wsDest = ThisWorkbook.Sheets("金額入力")
     On Error GoTo 0
     
-    ' シートの存在チェック
     If wsSource Is Nothing Or wsDest Is Nothing Then
-        MsgBox "「振込先選択」または「金額入力」シートが見つかりません。" & vbCrLf & "シート名を確認してください。", vbCritical, "エラー"
+        MsgBox "シートが見つかりません。", vbCritical
         Exit Sub
     End If
     
-    ' --- 貼り付け先の既存データをクリアします ---
+    ' --- 貼り付け先をクリア ---
+    ' 金額(A列)は残し、取引先名(B列)以降をクリアします
     wsDest.Range("B2:O" & wsDest.Rows.Count).ClearContents
     
-    ' --- コピー元のデータ範囲を特定します ---
+    ' --- 最終行を取得 ---
     lastRow = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
-    
-    ' ヘッダー行(2行目)までしかない場合は、処理を終了
     If lastRow <= 2 Then
-        MsgBox "コピーするデータがありません。", vbInformation, "情報"
+        MsgBox "データがありません。", vbInformation
         Exit Sub
     End If
     
-    ' 貼り付け先の開始行を設定（B2セルが起点）
     nextDestRow = 2
+    Application.ScreenUpdating = False
     
-    ' --- A列が「◯」のデータのみをループでコピーして貼り付けます ---
-    Application.ScreenUpdating = False ' 画面描画を停止して処理を高速化
-    
-    ' 3行目（データ開始行）から最終行までループ
+    ' --- ループ処理 ---
     For i = 3 To lastRow
-        
-        ' ★★★ 判定部分を「◯」（まる）に変更 ★★★
-        ' A列のセルの値が「◯」（まる）であるかチェックします
+        ' A列が「◯」なら処理
         If Trim(wsSource.Cells(i, "A").Value) = "◯" Then
             
-            ' C列からP列までの14列（元のコードのコピー範囲）をコピー
-            wsSource.Cells(i, "C").Resize(1, 14).Copy
+            ' ★★★ 最終確定版マッピング ★★★
+            ' ご提示いただいた「金額入力」シートの列順序に完璧に合わせました
             
-            ' 「金額入力」シートのB列の次の書き込み行に「値」のみを貼り付け
-            wsDest.Cells(nextDestRow, "B").PasteSpecial Paste:=xlPasteValues
+            ' 1. 取引先名
+            ' Source: D列(取引先名) -> Dest: B列(取引先名)
+            wsDest.Cells(nextDestRow, "B").Value = wsSource.Cells(i, "D").Value
             
-            ' 次の貼り付け行へ移動
+            ' 2. 手数料
+            ' Source: E列(手数料) -> Dest: C列(手数料)
+            wsDest.Cells(nextDestRow, "C").Value = wsSource.Cells(i, "E").Value
+            
+            ' 3. 銀行コード
+            ' Source: F列(コード) -> Dest: D列(コード)
+            ' ※ここがズレの原因でした。F列をピンポイント指定します。
+            wsDest.Cells(nextDestRow, "D").Value = wsSource.Cells(i, "F").Value
+            
+            ' 4. 銀行名
+            ' Source: G列(金融機関) -> Dest: E列(金融機関)
+            wsDest.Cells(nextDestRow, "E").Value = wsSource.Cells(i, "G").Value
+            
+            ' 5. 支店コード
+            ' Source: H列(支店コード) -> Dest: F列(支店コード)
+            wsDest.Cells(nextDestRow, "F").Value = wsSource.Cells(i, "H").Value
+            
+            ' 6. 支店名
+            ' Source: I列(支店名) -> Dest: G列(支店名)
+            wsDest.Cells(nextDestRow, "G").Value = wsSource.Cells(i, "I").Value
+            
+            ' 7. 預金種目
+            ' Source: J列(預金種類) -> Dest: H列(預金種類)
+            wsDest.Cells(nextDestRow, "H").Value = wsSource.Cells(i, "J").Value
+            
+            ' 8. 口座番号
+            ' Source: K列(口座番号) -> Dest: I列(口座番号)
+            wsDest.Cells(nextDestRow, "I").Value = wsSource.Cells(i, "K").Value
+            
+            ' 9. 名義人名
+            ' Source: L列(名義人名) -> Dest: J列(名義人名)
+            wsDest.Cells(nextDestRow, "J").Value = wsSource.Cells(i, "L").Value
+            
+            ' 10. 郵便番号以降の備考など（必要であれば追加）
+            ' Source: M,N,O... -> Dest: K,L,M...
+            ' 今回のCSV作成には必須ではありませんが、必要ならここに追加可能です
+            
             nextDestRow = nextDestRow + 1
         End If
     Next i
     
-    ' --- 処理の完了 ---
-    Application.CutCopyMode = False ' コピーモードを解除
-    Application.ScreenUpdating = True ' 画面描画を再開
+    Application.ScreenUpdating = True
     
-    ' nextDestRow - 2 でコピーしたデータ件数を算出
     If nextDestRow = 2 Then
-        ' 終了メッセージも「◯」に合わせて修正
-        MsgBox "A列に「◯」が入力されたデータは存在しませんでした。", vbInformation, "情報"
+        MsgBox "対象データがありませんでした。", vbInformation
     Else
-        MsgBox nextDestRow - 2 & " 件のデータを転記しました。", vbInformation, "完了"
+        MsgBox nextDestRow - 2 & " 件転記しました。", vbInformation
     End If
 End Sub
